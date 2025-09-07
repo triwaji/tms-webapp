@@ -9,9 +9,6 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Supabase Client - FIX VERSION -->
-    <script src="https://unpkg.com/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
-    
     <!-- Excel Processing -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
@@ -33,17 +30,10 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        
-        .glass {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
     </style>
 </head>
 <body class="bg-gray-50">
     <div id="app" class="min-h-screen">
-        <!-- Loading Screen -->
         <div class="flex items-center justify-center min-h-screen">
             <div class="text-center">
                 <div class="loader mx-auto mb-4"></div>
@@ -54,51 +44,83 @@
     
     <div id="toast-container" class="fixed top-4 right-4 z-50"></div>
 
+    <!-- SUPABASE JS LIBRARY - LOAD FIRST -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.js"></script>
+    
+    <!-- MAIN APPLICATION -->
     <script>
-        // Wait for all libraries to load
+        // Wait for Supabase to load
         window.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM loaded, initializing TMS...');
+            // Check if Supabase loaded
+            if (typeof window.supabase === 'undefined') {
+                console.error('Supabase failed to load. Loading backup...');
+                // Load backup CDN
+                const script = document.createElement('script');
+                script.src = 'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js';
+                script.onload = function() {
+                    console.log('Backup Supabase loaded');
+                    initializeApp();
+                };
+                document.head.appendChild(script);
+            } else {
+                console.log('Supabase loaded successfully');
+                initializeApp();
+            }
+        });
+        
+        function initializeApp() {
+            console.log('Initializing TMS application...');
+            console.log('Supabase available:', typeof window.supabase !== 'undefined');
             
             // ====================================
-            // KONFIGURASI - GANTI BAGIAN INI!
+            // KONFIGURASI - EDIT BAGIAN INI!
             // ====================================
             const CONFIG = {
-                SUPABASE_URL: 'https://fkodrpwdtavfxxpixzxn.supabase.co', // GANTI INI
-                SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrb2RycHdkdGF2Znh4cGl4enhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcyMjg1MDcsImV4cCI6MjA3MjgwNDUwN30.vJAfuqr8uv2twwaJABQyRzDJ8xFu0EY7s4l-MNVgF-A', // GANTI INI
-                DEMO_MODE: false // Set false jika sudah ada Supabase
+                // Ganti dengan URL Supabase Anda (dari Settings > API)
+                SUPABASE_URL: 'https://fkodrpwdtavfxxpixzxn.supabase.co',
+                // Ganti dengan Anon Key Anda (dari Settings > API)
+                SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrb2RycHdkdGF2Znh4cGl4enhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcyMjg1MDcsImV4cCI6MjA3MjgwNDUwN30.vJAfuqr8uv2twwaJABQyRzDJ8xFu0EY7s4l-MNVgF-A',
+                // Set false jika sudah setup Supabase
+                DEMO_MODE: false
             };
+            
+            // ====================================
+            // SUPABASE CLIENT
+            // ====================================
+            let supabaseClient = null;
+            
+            // Initialize Supabase if configured
+            if (!CONFIG.DEMO_MODE && CONFIG.SUPABASE_URL !== 'https://fkodrpwdtavfxxpixzxn.supabase.co') {
+                try {
+                    console.log('Creating Supabase client...');
+                    supabaseClient = window.supabase.createClient(
+                        CONFIG.SUPABASE_URL,
+                        CONFIG.SUPABASE_ANON_KEY
+                    );
+                    console.log('Supabase client created successfully');
+                } catch (error) {
+                    console.error('Error creating Supabase client:', error);
+                }
+            }
             
             // ====================================
             // STATE MANAGEMENT
             // ====================================
-            const AppState = {
+            window.AppState = {
                 user: null,
                 userRole: null,
                 currentView: 'login',
-                loading: false,
-                data: {
-                    orders: [],
-                    vehicles: [],
-                    vendors: [],
-                    trips: []
-                }
+                loading: false
             };
             
             // ====================================
             // UTILITY FUNCTIONS
             // ====================================
-            const Utils = {
-                formatRupiah: function(num) {
-                    return 'Rp ' + (num || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-                },
-                
-                formatDate: function(date) {
-                    const d = new Date(date);
-                    return d.toLocaleDateString('id-ID');
-                },
-                
+            window.Utils = {
                 showToast: function(message, type = 'info') {
                     const container = document.getElementById('toast-container');
+                    if (!container) return;
+                    
                     const toast = document.createElement('div');
                     const colors = {
                         success: 'bg-green-500',
@@ -107,7 +129,7 @@
                         info: 'bg-blue-500'
                     };
                     
-                    toast.className = colors[type] + ' text-white px-6 py-3 rounded-lg shadow-lg mb-2';
+                    toast.className = colors[type] + ' text-white px-6 py-3 rounded-lg shadow-lg mb-2 animate-pulse';
                     toast.innerHTML = '<i class="fas fa-info-circle mr-2"></i>' + message;
                     
                     container.appendChild(toast);
@@ -118,204 +140,106 @@
             };
             
             // ====================================
-            // DEMO DATA
+            // AUTHENTICATION FUNCTIONS
             // ====================================
-            const DemoData = {
-                orders: [
-                    {
-                        id: 1,
-                        orderNo: '2401040174',
-                        customer: 'Maruli Manurung',
-                        item: 'NPK Phonska Plus 25kg',
-                        qty: 150,
-                        status: 'pending',
-                        deliveryType: 'Pickup',
-                        address: 'Peranap, Indragiri Hulu, Riau'
-                    },
-                    {
-                        id: 2,
-                        orderNo: '2401040175',
-                        customer: 'Ahmad Sudirman',
-                        item: 'NPK Phonska Plus 25kg',
-                        qty: 200,
-                        status: 'delivered',
-                        deliveryType: 'Delivery',
-                        address: 'Jakarta Selatan'
-                    }
-                ],
-                vehicles: [
-                    {
-                        id: 1,
-                        vehicleId: 'VH-001',
-                        platNumber: 'B 1234 CD',
-                        type: 'L300',
-                        vendor: 'PT Express Logistics',
-                        status: 'available'
-                    },
-                    {
-                        id: 2,
-                        vehicleId: 'VH-002',
-                        platNumber: 'B 5678 EF',
-                        type: 'CDD Box',
-                        vendor: 'CV Cepat Kirim',
-                        status: 'in_transit'
-                    }
-                ]
-            };
-
-            //====================
-            //Update
-            //====================
-            async function login(email, password) {
-    console.log('=== LOGIN DEBUG ===');
-    console.log('Email:', email);
-    console.log('Config URL:', CONFIG.SUPABASE_URL);
-    console.log('Has Anon Key:', CONFIG.SUPABASE_ANON_KEY ? 'Yes' : 'No');
-    console.log('Demo Mode:', CONFIG.DEMO_MODE);
-    
-    // Demo login
-    if (CONFIG.DEMO_MODE || email === 'demo@tms.com') {
-        if (email === 'demo@tms.com' && password === 'demo123') {
-            AppState.user = { email: 'demo@tms.com', name: 'Demo User' };
-            AppState.userRole = 'admin';
-            Utils.showToast('Login berhasil (Demo)!', 'success');
-            renderDashboard();
-            return;
-        }
-    }
-    
-    // Supabase login
-    try {
-        // Check if Supabase is loaded
-        if (!window.supabase) {
-            console.error('Supabase not loaded!');
-            Utils.showToast('Supabase library not loaded', 'error');
-            return;
-        }
-        
-        // Create client
-        const { createClient } = window.supabase;
-        const supabaseClient = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
-        
-        console.log('Attempting Supabase login...');
-        
-        // Try to login
-        const { data, error } = await supabaseClient.auth.signInWithPassword({
-            email: email.trim(),
-            password: password
-        });
-        
-        console.log('Login response:', { data, error });
-        
-        if (error) {
-            console.error('Login error details:', error);
-            
-            // Specific error messages
-            if (error.message.includes('Invalid login')) {
-                Utils.showToast('Email atau password salah', 'error');
-            } else if (error.message.includes('Email not confirmed')) {
-                Utils.showToast('Email belum dikonfirmasi', 'error');
-            } else if (error.message.includes('fetch')) {
-                Utils.showToast('Tidak bisa connect ke Supabase. Cek URL dan API Key', 'error');
-            } else {
-                Utils.showToast('Error: ' + error.message, 'error');
-            }
-            return;
-        }
-        
-        // Login success
-        console.log('Login successful!', data.user);
-        
-        // Get user role from public.users
-        const { data: userData, error: userError } = await supabaseClient
-            .from('users')
-            .select('*')
-            .eq('email', email.trim())
-            .single();
-        
-        console.log('User data:', userData);
-        
-        if (userError) {
-            console.warn('Could not get user data:', userError);
-            // Create user in public.users if not exists
-            const { error: insertError } = await supabaseClient
-                .from('users')
-                .insert({
-                    id: data.user.id,
-                    email: email.trim(),
-                    password_hash: 'not_used',
-                    full_name: email.split('@')[0],
-                    role: 'admin',
-                    is_active: true
-                });
-            
-            if (insertError) {
-                console.error('Error creating user record:', insertError);
-            }
-        }
-        
-        AppState.user = data.user;
-        AppState.userRole = userData?.role || 'admin';
-        
-        Utils.showToast('Login berhasil!', 'success');
-        renderDashboard();
-        
-    } catch (err) {
-        console.error('Unexpected error:', err);
-        Utils.showToast('Terjadi kesalahan: ' + err.message, 'error');
-    }
-}
-
-
-            
-            // ====================================
-            // AUTHENTICATION
-            // ====================================
-            function login(email, password) {
+            window.handleLogin = async function(event) {
+                event.preventDefault();
+                const email = document.getElementById('email').value.trim();
+                const password = document.getElementById('password').value;
+                
                 console.log('Login attempt:', email);
                 
-                // Demo login
+                // Demo login - always available
                 if (email === 'demo@tms.com' && password === 'demo123') {
-                    AppState.user = { email: 'demo@tms.com', name: 'Demo User' };
-                    AppState.userRole = 'admin';
+                    console.log('Demo login successful');
+                    window.AppState.user = { email: 'demo@tms.com' };
+                    window.AppState.userRole = 'admin';
                     localStorage.setItem('tms_user', JSON.stringify({
-                        user: AppState.user,
-                        role: AppState.userRole
+                        user: window.AppState.user,
+                        role: window.AppState.userRole
                     }));
-                    Utils.showToast('Login berhasil!', 'success');
+                    window.Utils.showToast('Login berhasil (Demo Mode)!', 'success');
                     renderDashboard();
                     return;
                 }
                 
-                // Supabase login (if configured)
-                if (!CONFIG.DEMO_MODE && window.supabase) {
-                    const { createClient } = window.supabase;
-                    const supabaseClient = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
-                    
-                    supabaseClient.auth.signInWithPassword({
-                        email: email,
-                        password: password
-                    }).then(function(response) {
-                        if (response.error) {
-                            Utils.showToast('Login gagal: ' + response.error.message, 'error');
-                        } else {
-                            AppState.user = response.data.user;
-                            AppState.userRole = 'admin';
-                            renderDashboard();
+                // Supabase login
+                if (!CONFIG.DEMO_MODE && supabaseClient) {
+                    try {
+                        console.log('Attempting Supabase login...');
+                        
+                        const { data, error } = await supabaseClient.auth.signInWithPassword({
+                            email: email,
+                            password: password
+                        });
+                        
+                        if (error) {
+                            console.error('Supabase login error:', error);
+                            
+                            // Handle specific errors
+                            if (error.message.includes('Invalid login credentials')) {
+                                window.Utils.showToast('Email atau password salah', 'error');
+                            } else if (error.message.includes('Email not confirmed')) {
+                                window.Utils.showToast('Email belum dikonfirmasi. Cek inbox email Anda.', 'warning');
+                            } else {
+                                window.Utils.showToast('Login error: ' + error.message, 'error');
+                            }
+                            return;
                         }
-                    });
+                        
+                        console.log('Supabase login successful');
+                        
+                        // Get user role from database
+                        const { data: userData, error: userError } = await supabaseClient
+                            .from('users')
+                            .select('*')
+                            .eq('email', email)
+                            .single();
+                        
+                        if (userError) {
+                            console.warn('Could not fetch user data:', userError);
+                            // Create user record if not exists
+                            await supabaseClient.from('users').insert({
+                                id: data.user.id,
+                                email: email,
+                                full_name: email.split('@')[0],
+                                role: 'admin',
+                                is_active: true,
+                                password_hash: 'not_used_for_auth'
+                            });
+                        }
+                        
+                        window.AppState.user = data.user;
+                        window.AppState.userRole = userData?.role || 'admin';
+                        
+                        localStorage.setItem('tms_user', JSON.stringify({
+                            user: window.AppState.user,
+                            role: window.AppState.userRole
+                        }));
+                        
+                        window.Utils.showToast('Login berhasil!', 'success');
+                        renderDashboard();
+                        
+                    } catch (err) {
+                        console.error('Login exception:', err);
+                        window.Utils.showToast('Error: ' + err.message, 'error');
+                    }
                 } else {
-                    Utils.showToast('Email atau password salah', 'error');
+                    // No Supabase configured
+                    window.Utils.showToast('Login gagal. Gunakan demo account atau setup Supabase.', 'error');
                 }
-            }
+            };
             
-            function logout() {
-                AppState.user = null;
-                AppState.userRole = null;
+            window.logout = function() {
+                window.AppState.user = null;
+                window.AppState.userRole = null;
                 localStorage.removeItem('tms_user');
+                if (supabaseClient) {
+                    supabaseClient.auth.signOut();
+                }
                 renderLogin();
-                Utils.showToast('Logout berhasil', 'info');
-            }
+                window.Utils.showToast('Logout berhasil', 'info');
+            };
             
             // ====================================
             // RENDER FUNCTIONS
@@ -335,32 +259,48 @@
                             
                             <form onsubmit="handleLogin(event)" class="space-y-6">
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        <i class="fas fa-envelope mr-2"></i>Email
+                                    </label>
                                     <input type="email" id="email" required
-                                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                                        placeholder="demo@tms.com">
+                                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        placeholder="user@example.com">
                                 </div>
                                 
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        <i class="fas fa-lock mr-2"></i>Password
+                                    </label>
                                     <input type="password" id="password" required
-                                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                                        placeholder="demo123">
+                                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        placeholder="••••••••">
                                 </div>
                                 
                                 <button type="submit"
-                                    class="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold py-3 rounded-lg hover:from-purple-700 hover:to-blue-700">
+                                    class="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold py-3 rounded-lg hover:from-purple-700 hover:to-blue-700 transition">
                                     <i class="fas fa-sign-in-alt mr-2"></i>Masuk
                                 </button>
                             </form>
                             
                             <div class="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                                <p class="text-sm text-yellow-800">
-                                    <strong>Demo Account:</strong><br>
+                                <p class="text-sm font-semibold text-yellow-800 mb-2">
+                                    <i class="fas fa-info-circle mr-1"></i>Demo Account:
+                                </p>
+                                <p class="text-sm text-yellow-700">
                                     Email: demo@tms.com<br>
                                     Password: demo123
                                 </p>
                             </div>
+                            
+                            ${CONFIG.DEMO_MODE ? `
+                                <div class="mt-4 text-center text-xs text-gray-500">
+                                    Running in DEMO MODE
+                                </div>
+                            ` : `
+                                <div class="mt-4 text-center text-xs text-green-600">
+                                    <i class="fas fa-check-circle mr-1"></i>Connected to Supabase
+                                </div>
+                            `}
                         </div>
                     </div>
                 `;
@@ -374,10 +314,22 @@
                         <div class="w-64 bg-white shadow-lg">
                             <div class="p-6 bg-gradient-to-r from-purple-600 to-blue-600 text-white">
                                 <h2 class="text-xl font-bold">TMS Portal</h2>
-                                <p class="text-sm opacity-90 mt-1">${AppState.userRole?.toUpperCase() || 'USER'}</p>
+                                <p class="text-sm opacity-90 mt-1">${window.AppState.userRole?.toUpperCase() || 'USER'}</p>
                             </div>
                             
-                            <nav class="mt-6">
+                            <div class="p-4 border-b">
+                                <div class="flex items-center">
+                                    <div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                                        <i class="fas fa-user text-purple-600"></i>
+                                    </div>
+                                    <div class="ml-3">
+                                        <p class="text-sm font-medium text-gray-900">${window.AppState.user?.email || 'User'}</p>
+                                        <p class="text-xs text-gray-500">Online</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <nav class="mt-4">
                                 <button onclick="navigateTo('dashboard')" class="w-full text-left px-6 py-3 text-gray-700 hover:bg-purple-50 flex items-center">
                                     <i class="fas fa-tachometer-alt mr-3"></i>Dashboard
                                 </button>
@@ -393,10 +345,13 @@
                                 <button onclick="navigateTo('monitoring')" class="w-full text-left px-6 py-3 text-gray-700 hover:bg-purple-50 flex items-center">
                                     <i class="fas fa-map-marked-alt mr-3"></i>Monitoring
                                 </button>
+                                <button onclick="navigateTo('reports')" class="w-full text-left px-6 py-3 text-gray-700 hover:bg-purple-50 flex items-center">
+                                    <i class="fas fa-chart-bar mr-3"></i>Reports
+                                </button>
                             </nav>
                             
                             <div class="absolute bottom-0 w-64 p-4">
-                                <button onclick="logout()" class="w-full bg-red-500 text-white py-2 rounded-lg hover:bg-red-600">
+                                <button onclick="logout()" class="w-full bg-red-500 text-white py-2 rounded-lg hover:bg-red-600 flex items-center justify-center">
                                     <i class="fas fa-sign-out-alt mr-2"></i>Logout
                                 </button>
                             </div>
@@ -404,6 +359,9 @@
                         
                         <!-- Main Content -->
                         <div class="flex-1 overflow-auto">
+                            <header class="bg-white shadow-sm px-8 py-4">
+                                <h1 class="text-2xl font-semibold text-gray-800">Dashboard</h1>
+                            </header>
                             <div class="p-8">
                                 <div id="mainContent">
                                     ${renderDashboardContent()}
@@ -416,8 +374,6 @@
             
             function renderDashboardContent() {
                 return `
-                    <h1 class="text-3xl font-bold text-gray-800 mb-8">Dashboard Overview</h1>
-                    
                     <!-- Stats Cards -->
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                         <div class="bg-white rounded-lg shadow p-6">
@@ -469,153 +425,82 @@
                         </div>
                     </div>
                     
-                    <!-- Recent Activity -->
-                    <div class="bg-white rounded-lg shadow p-6">
-                        <h2 class="text-xl font-semibold mb-4">Recent Activity</h2>
-                        <div class="space-y-3">
-                            <div class="flex items-center p-3 bg-gray-50 rounded">
-                                <div class="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                                <div>
-                                    <p class="text-sm font-medium">New order #2401040174 created</p>
-                                    <p class="text-xs text-gray-500">2 minutes ago</p>
-                                </div>
-                            </div>
-                            <div class="flex items-center p-3 bg-gray-50 rounded">
-                                <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                                <div>
-                                    <p class="text-sm font-medium">Trip TR-2024-001 started</p>
-                                    <p class="text-xs text-gray-500">15 minutes ago</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
-            
-            function renderOrdersContent() {
-                const orders = DemoData.orders;
-                return `
-                    <div class="flex justify-between items-center mb-6">
-                        <h1 class="text-3xl font-bold text-gray-800">Orders Management</h1>
-                        <button onclick="showCreateModal('order')" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700">
-                            <i class="fas fa-plus mr-2"></i>Create Order
-                        </button>
-                    </div>
-                    
-                    <div class="bg-white rounded-lg shadow overflow-hidden">
-                        <table class="w-full">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order No</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Qty</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200">
-                                ${orders.map(order => `
-                                    <tr class="hover:bg-gray-50">
-                                        <td class="px-6 py-4 text-sm">${order.orderNo}</td>
-                                        <td class="px-6 py-4 text-sm">${order.customer}</td>
-                                        <td class="px-6 py-4 text-sm">${order.item}</td>
-                                        <td class="px-6 py-4 text-sm">${order.qty}</td>
-                                        <td class="px-6 py-4">
-                                            <span class="px-2 py-1 text-xs rounded-full ${
-                                                order.status === 'delivered' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                                            }">
-                                                ${order.status}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            }
-            
-            function renderVehiclesContent() {
-                const vehicles = DemoData.vehicles;
-                return `
-                    <div class="flex justify-between items-center mb-6">
-                        <h1 class="text-3xl font-bold text-gray-800">Vehicle Management</h1>
-                        <button onclick="showCreateModal('vehicle')" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700">
-                            <i class="fas fa-plus mr-2"></i>Add Vehicle
-                        </button>
-                    </div>
-                    
-                    <div class="bg-white rounded-lg shadow overflow-hidden">
-                        <table class="w-full">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vehicle ID</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Plat Number</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200">
-                                ${vehicles.map(vehicle => `
-                                    <tr class="hover:bg-gray-50">
-                                        <td class="px-6 py-4 text-sm">${vehicle.vehicleId}</td>
-                                        <td class="px-6 py-4 text-sm font-medium">${vehicle.platNumber}</td>
-                                        <td class="px-6 py-4 text-sm">${vehicle.type}</td>
-                                        <td class="px-6 py-4 text-sm">${vehicle.vendor}</td>
-                                        <td class="px-6 py-4">
-                                            <span class="px-2 py-1 text-xs rounded-full ${
-                                                vehicle.status === 'available' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
-                                            }">
-                                                ${vehicle.status}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            }
-            
-            function renderPlanningContent() {
-                return `
-                    <h1 class="text-3xl font-bold text-gray-800 mb-8">Delivery Planning</h1>
-                    
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Quick Actions -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                         <div class="bg-white rounded-lg shadow p-6">
-                            <h3 class="text-lg font-semibold mb-4">Unplanned Orders</h3>
-                            <div class="space-y-3">
-                                <div class="p-4 bg-yellow-50 rounded border border-yellow-200">
-                                    <p class="font-medium">#2401040174</p>
-                                    <p class="text-sm text-gray-600">Maruli Manurung - 150 units</p>
-                                    <button class="mt-2 text-xs bg-purple-600 text-white px-3 py-1 rounded">Plan</button>
-                                </div>
+                            <h3 class="text-lg font-semibold mb-4">Quick Actions</h3>
+                            <div class="grid grid-cols-2 gap-4">
+                                <button onclick="Utils.showToast('Opening create order...', 'info')" class="p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition">
+                                    <i class="fas fa-plus-circle text-2xl text-purple-600"></i>
+                                    <p class="mt-2 text-sm font-medium">New Order</p>
+                                </button>
+                                <button onclick="Utils.showToast('Opening vehicle assignment...', 'info')" class="p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition">
+                                    <i class="fas fa-truck-moving text-2xl text-blue-600"></i>
+                                    <p class="mt-2 text-sm font-medium">Assign Vehicle</p>
+                                </button>
+                                <button onclick="Utils.showToast('Opening trip planning...', 'info')" class="p-4 bg-green-50 rounded-lg hover:bg-green-100 transition">
+                                    <i class="fas fa-route text-2xl text-green-600"></i>
+                                    <p class="mt-2 text-sm font-medium">Plan Trip</p>
+                                </button>
+                                <button onclick="Utils.showToast('Opening reports...', 'info')" class="p-4 bg-orange-50 rounded-lg hover:bg-orange-100 transition">
+                                    <i class="fas fa-chart-line text-2xl text-orange-600"></i>
+                                    <p class="mt-2 text-sm font-medium">View Reports</p>
+                                </button>
                             </div>
                         </div>
                         
                         <div class="bg-white rounded-lg shadow p-6">
-                            <h3 class="text-lg font-semibold mb-4">Available Vehicles</h3>
+                            <h3 class="text-lg font-semibold mb-4">Recent Activity</h3>
                             <div class="space-y-3">
-                                <div class="p-4 bg-green-50 rounded border border-green-200">
-                                    <p class="font-medium">B 1234 CD</p>
-                                    <p class="text-sm text-gray-600">L300 - Available</p>
+                                <div class="flex items-center p-3 bg-gray-50 rounded">
+                                    <div class="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                                    <div>
+                                        <p class="text-sm font-medium">Order #2401040174 delivered</p>
+                                        <p class="text-xs text-gray-500">2 minutes ago</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center p-3 bg-gray-50 rounded">
+                                    <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                                    <div>
+                                        <p class="text-sm font-medium">Vehicle B 1234 CD assigned</p>
+                                        <p class="text-xs text-gray-500">15 minutes ago</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center p-3 bg-gray-50 rounded">
+                                    <div class="w-2 h-2 bg-yellow-500 rounded-full mr-3"></div>
+                                    <div>
+                                        <p class="text-sm font-medium">New order #2401040175 created</p>
+                                        <p class="text-xs text-gray-500">1 hour ago</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                `;
-            }
-            
-            function renderMonitoringContent() {
-                return `
-                    <h1 class="text-3xl font-bold text-gray-800 mb-8">Trip Monitoring</h1>
                     
+                    <!-- System Status -->
                     <div class="bg-white rounded-lg shadow p-6">
-                        <div class="bg-gray-100 rounded h-96 flex items-center justify-center">
+                        <h3 class="text-lg font-semibold mb-4">System Status</h3>
+                        <div class="grid grid-cols-3 gap-4">
                             <div class="text-center">
-                                <i class="fas fa-map text-6xl text-gray-400 mb-4"></i>
-                                <p class="text-gray-600">Live tracking map will be displayed here</p>
+                                <div class="inline-flex items-center justify-center w-12 h-12 bg-green-100 rounded-full mb-2">
+                                    <i class="fas fa-check text-green-600"></i>
+                                </div>
+                                <p class="text-sm font-medium">Database</p>
+                                <p class="text-xs text-gray-500">Connected</p>
+                            </div>
+                            <div class="text-center">
+                                <div class="inline-flex items-center justify-center w-12 h-12 bg-green-100 rounded-full mb-2">
+                                    <i class="fas fa-check text-green-600"></i>
+                                </div>
+                                <p class="text-sm font-medium">API</p>
+                                <p class="text-xs text-gray-500">Operational</p>
+                            </div>
+                            <div class="text-center">
+                                <div class="inline-flex items-center justify-center w-12 h-12 ${CONFIG.DEMO_MODE ? 'bg-yellow-100' : 'bg-green-100'} rounded-full mb-2">
+                                    <i class="fas ${CONFIG.DEMO_MODE ? 'fa-exclamation' : 'fa-check'} ${CONFIG.DEMO_MODE ? 'text-yellow-600' : 'text-green-600'}"></i>
+                                </div>
+                                <p class="text-sm font-medium">Mode</p>
+                                <p class="text-xs text-gray-500">${CONFIG.DEMO_MODE ? 'Demo' : 'Production'}</p>
                             </div>
                         </div>
                     </div>
@@ -623,58 +508,75 @@
             }
             
             // ====================================
-            // GLOBAL FUNCTIONS
+            // NAVIGATION FUNCTIONS
             // ====================================
-            window.handleLogin = function(event) {
-                event.preventDefault();
-                const email = document.getElementById('email').value;
-                const password = document.getElementById('password').value;
-                login(email, password);
-            };
-            
             window.navigateTo = function(view) {
-                AppState.currentView = view;
-                const content = document.getElementById('mainContent');
+                console.log('Navigating to:', view);
+                window.AppState.currentView = view;
                 
+                const content = document.getElementById('mainContent');
+                if (!content) return;
+                
+                // Update header
+                const header = document.querySelector('header h1');
+                if (header) {
+                    const titles = {
+                        dashboard: 'Dashboard',
+                        orders: 'Orders Management',
+                        vehicles: 'Vehicle Management',
+                        planning: 'Delivery Planning',
+                        monitoring: 'Trip Monitoring',
+                        reports: 'Reports & Analytics'
+                    };
+                    header.textContent = titles[view] || 'Dashboard';
+                }
+                
+                // Simple content for now
                 switch(view) {
                     case 'orders':
-                        content.innerHTML = renderOrdersContent();
+                        content.innerHTML = `
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <h2 class="text-xl font-semibold mb-4">Orders Management</h2>
+                                <p class="text-gray-600">Order management interface will be displayed here.</p>
+                            </div>
+                        `;
                         break;
                     case 'vehicles':
-                        content.innerHTML = renderVehiclesContent();
-                        break;
-                    case 'planning':
-                        content.innerHTML = renderPlanningContent();
-                        break;
-                    case 'monitoring':
-                        content.innerHTML = renderMonitoringContent();
+                        content.innerHTML = `
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <h2 class="text-xl font-semibold mb-4">Vehicle Management</h2>
+                                <p class="text-gray-600">Vehicle management interface will be displayed here.</p>
+                            </div>
+                        `;
                         break;
                     default:
                         content.innerHTML = renderDashboardContent();
                 }
             };
             
-            window.showCreateModal = function(type) {
-                Utils.showToast('Opening ' + type + ' creation form...', 'info');
-            };
-            
-            window.logout = logout;
-            
             // ====================================
             // INITIALIZATION
             // ====================================
             function init() {
-                console.log('Initializing TMS application...');
+                console.log('=== TMS INITIALIZATION ===');
+                console.log('Supabase loaded:', typeof window.supabase !== 'undefined');
+                console.log('Config:', {
+                    url: CONFIG.SUPABASE_URL.substring(0, 30) + '...',
+                    hasKey: CONFIG.SUPABASE_ANON_KEY !== 'your-anon-key-here',
+                    demoMode: CONFIG.DEMO_MODE
+                });
                 
                 // Check for saved session
                 const savedUser = localStorage.getItem('tms_user');
                 if (savedUser) {
                     try {
                         const userData = JSON.parse(savedUser);
-                        AppState.user = userData.user;
-                        AppState.userRole = userData.role;
+                        window.AppState.user = userData.user;
+                        window.AppState.userRole = userData.role;
+                        console.log('Restored session for:', userData.user.email);
                         renderDashboard();
                     } catch(e) {
+                        console.log('No valid session found');
                         renderLogin();
                     }
                 } else {
@@ -684,7 +586,7 @@
             
             // Start the application
             init();
-        });
+        }
     </script>
 </body>
 </html>
