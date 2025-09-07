@@ -75,15 +75,14 @@
             // ====================================
             // KONFIGURASI - EDIT BAGIAN INI!
             // ====================================
-            window.CONFIG = {
-            SUPABASE_URL: 'https://fkodrpwdtavfxxpixzxn.supabase.co',
-            SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrb2RycHdkdGF2Znh4cGl4enhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcyMjg1MDcsImV4cCI6MjA3MjgwNDUwN30.vJAfuqr8uv2twwaJABQyRzDJ8xFu0EY7s4l-MNVgF-A, // Ganti dengan key Anda
-            DEMO_MODE: false
+            const CONFIG = {
+                // Ganti dengan URL Supabase Anda (dari Settings > API)
+                SUPABASE_URL: 'https://fkodrpwdtavfxxpixzxn.supabase.co',
+                // Ganti dengan Anon Key Anda (dari Settings > API)
+                SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrb2RycHdkdGF2Znh4cGl4enhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcyMjg1MDcsImV4cCI6MjA3MjgwNDUwN30.vJAfuqr8uv2twwaJABQyRzDJ8xFu0EY7s4l-MNVgF-A',
+                // Set false jika sudah setup Supabase
+                DEMO_MODE: false
             };
-        
-         function initializeApp() {
-            console.log('Initializing TMS application...');
-            const CONFIG = window.CONFIG; // Use global CONFIG
             
             // ====================================
             // SUPABASE CLIENT
@@ -91,7 +90,7 @@
             let supabaseClient = null;
             
             // Initialize Supabase if configured
-            if (!CONFIG.DEMO_MODE && CONFIG.SUPABASE_URL !== 'https://fkodrpwdtavfxxpixzxn.supabase.co') {
+            if (!CONFIG.DEMO_MODE && CONFIG.SUPABASE_URL !== 'https://your-project.supabase.co') {
                 try {
                     console.log('Creating Supabase client...');
                     supabaseClient = window.supabase.createClient(
