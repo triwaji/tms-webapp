@@ -162,6 +162,111 @@
                     }
                 ]
             };
+
+            //====================
+            //Update
+            //====================
+            async function login(email, password) {
+    console.log('=== LOGIN DEBUG ===');
+    console.log('Email:', email);
+    console.log('Config URL:', CONFIG.SUPABASE_URL);
+    console.log('Has Anon Key:', CONFIG.SUPABASE_ANON_KEY ? 'Yes' : 'No');
+    console.log('Demo Mode:', CONFIG.DEMO_MODE);
+    
+    // Demo login
+    if (CONFIG.DEMO_MODE || email === 'demo@tms.com') {
+        if (email === 'demo@tms.com' && password === 'demo123') {
+            AppState.user = { email: 'demo@tms.com', name: 'Demo User' };
+            AppState.userRole = 'admin';
+            Utils.showToast('Login berhasil (Demo)!', 'success');
+            renderDashboard();
+            return;
+        }
+    }
+    
+    // Supabase login
+    try {
+        // Check if Supabase is loaded
+        if (!window.supabase) {
+            console.error('Supabase not loaded!');
+            Utils.showToast('Supabase library not loaded', 'error');
+            return;
+        }
+        
+        // Create client
+        const { createClient } = window.supabase;
+        const supabaseClient = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+        
+        console.log('Attempting Supabase login...');
+        
+        // Try to login
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
+            email: email.trim(),
+            password: password
+        });
+        
+        console.log('Login response:', { data, error });
+        
+        if (error) {
+            console.error('Login error details:', error);
+            
+            // Specific error messages
+            if (error.message.includes('Invalid login')) {
+                Utils.showToast('Email atau password salah', 'error');
+            } else if (error.message.includes('Email not confirmed')) {
+                Utils.showToast('Email belum dikonfirmasi', 'error');
+            } else if (error.message.includes('fetch')) {
+                Utils.showToast('Tidak bisa connect ke Supabase. Cek URL dan API Key', 'error');
+            } else {
+                Utils.showToast('Error: ' + error.message, 'error');
+            }
+            return;
+        }
+        
+        // Login success
+        console.log('Login successful!', data.user);
+        
+        // Get user role from public.users
+        const { data: userData, error: userError } = await supabaseClient
+            .from('users')
+            .select('*')
+            .eq('email', email.trim())
+            .single();
+        
+        console.log('User data:', userData);
+        
+        if (userError) {
+            console.warn('Could not get user data:', userError);
+            // Create user in public.users if not exists
+            const { error: insertError } = await supabaseClient
+                .from('users')
+                .insert({
+                    id: data.user.id,
+                    email: email.trim(),
+                    password_hash: 'not_used',
+                    full_name: email.split('@')[0],
+                    role: 'admin',
+                    is_active: true
+                });
+            
+            if (insertError) {
+                console.error('Error creating user record:', insertError);
+            }
+        }
+        
+        AppState.user = data.user;
+        AppState.userRole = userData?.role || 'admin';
+        
+        Utils.showToast('Login berhasil!', 'success');
+        renderDashboard();
+        
+    } catch (err) {
+        console.error('Unexpected error:', err);
+        Utils.showToast('Terjadi kesalahan: ' + err.message, 'error');
+    }
+}
+
+
             
             // ====================================
             // AUTHENTICATION
